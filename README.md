@@ -94,7 +94,7 @@ Before publishing a release publicly:
 
 Because Publican is currently unsigned, macOS Gatekeeper may block it the first time.
 
-Use this flow:
+If you downloaded the DMG/ZIP manually, try this flow:
 
 1. Copy `Publican-macOS.zip` or `Publican-macOS.dmg` to the Mac.
 2. Extract or mount it.
@@ -102,6 +102,14 @@ Use this flow:
 4. Right-click `Publican.app`.
 5. Choose **Open**.
 6. Confirm the prompt.
+
+If macOS says `Publican.app` is damaged and should be moved to the Bin, remove the quarantine flag and reopen it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Publican.app
+```
+
+This can happen with the Homebrew cask install path because macOS preserves the download quarantine flag from GitHub. It should not be needed once Publican is signed and notarised.
 
 For normal public distribution, Publican should be signed and notarised with an Apple Developer ID certificate.
 
