@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
 
 - Stopped Homebrew health-check warnings from being mislabelled as package search failures.
 
