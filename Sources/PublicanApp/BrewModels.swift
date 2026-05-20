@@ -112,6 +112,26 @@ struct BrewPackage: Identifiable, Hashable {
     var id: String {
         "\(kind.rawValue):\(name)"
     }
+
+    var kindSortValue: String {
+        kind.rawValue
+    }
+
+    var installedStateSortValue: String {
+        installed ? "Installed" : "Available"
+    }
+
+    var outdatedStateSortValue: String {
+        "Outdated"
+    }
+
+    var installedVersionSortValue: String {
+        installedVersion ?? ""
+    }
+
+    var currentVersionSortValue: String {
+        currentVersion ?? ""
+    }
 }
 
 struct BrewPendingCommand: Identifiable {

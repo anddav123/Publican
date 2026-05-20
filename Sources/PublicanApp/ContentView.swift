@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var selectedOutdatedPackageIDs = Set<BrewPackage.ID>()
     @State private var installedFilter = ""
     @State private var outdatedFilter = ""
+    @State private var installedSortOrder = [KeyPathComparator(\BrewPackage.name)]
+    @State private var searchSortOrder = [KeyPathComparator(\BrewPackage.name)]
+    @State private var outdatedSortOrder = [KeyPathComparator(\BrewPackage.name)]
     @AppStorage("autoRefreshInstalledOnLaunch") private var autoRefreshInstalledOnLaunch = true
     @AppStorage("autoRefreshOutdatedOnLaunch") private var autoRefreshOutdatedOnLaunch = true
     @AppStorage("commandOutputExpandedByDefault") private var showsCommandOutput = true
@@ -459,6 +462,7 @@ struct ContentView: View {
                 title: "Installed Formulae & Casks",
                 packages: filteredInstalledPackages,
                 selection: $selectedInstalledPackageID,
+                sortOrder: $installedSortOrder,
                 actionTitle: "Uninstall",
                 actionIcon: "trash",
                 primaryAction: .uninstall,
@@ -510,6 +514,7 @@ struct ContentView: View {
             title: title,
             packages: packages,
             selection: $selectedSearchResultID,
+            sortOrder: $searchSortOrder,
             actionTitle: "Install",
             actionIcon: "plus.circle",
             primaryAction: .install,
@@ -536,8 +541,8 @@ struct ContentView: View {
             filterField("Filter outdated", text: $outdatedFilter)
 
             ZStack {
-                Table(filteredOutdatedPackages, selection: $selectedOutdatedPackageIDs) {
-                    TableColumn("Name") { package in
+                Table(filteredOutdatedPackages, selection: $selectedOutdatedPackageIDs, sortOrder: $outdatedSortOrder) {
+                    TableColumn("Name", value: \BrewPackage.name) { package in
                         Text(package.name)
                             .contextMenu {
                                 packageActionItems(
@@ -550,18 +555,18 @@ struct ContentView: View {
                                 )
                             }
                     }
-                    TableColumn("Type") { package in
+                    TableColumn("Type", value: \BrewPackage.kindSortValue) { package in
                         Text(package.kind.rawValue)
                     }
-                    TableColumn("Installed") { package in
+                    TableColumn("Installed", value: \BrewPackage.installedVersionSortValue) { package in
                         Text(package.installedVersion ?? "Unknown")
                             .foregroundStyle(.secondary)
                     }
-                    TableColumn("Current") { package in
+                    TableColumn("Current", value: \BrewPackage.currentVersionSortValue) { package in
                         Text(package.currentVersion ?? "Unknown")
                             .foregroundStyle(package.currentVersion == nil ? .secondary : .primary)
                     }
-                    TableColumn("State") { _ in
+                    TableColumn("State", value: \BrewPackage.outdatedStateSortValue) { _ in
                         Text("Outdated")
                             .foregroundStyle(.orange)
                     }
@@ -733,6 +738,7 @@ struct ContentView: View {
         title: String,
         packages: [BrewPackage],
         selection: Binding<BrewPackage.ID?>,
+        sortOrder: Binding<[KeyPathComparator<BrewPackage>]>,
         actionTitle: String,
         actionIcon: String,
         primaryAction: BrewPackageAction,
@@ -749,8 +755,8 @@ struct ContentView: View {
             }
 
             ZStack {
-                Table(packages, selection: selection) {
-                    TableColumn("Name") { package in
+                Table(packages, selection: selection, sortOrder: sortOrder) {
+                    TableColumn("Name", value: \BrewPackage.name) { package in
                         Text(package.name)
                             .contextMenu {
                                 packageActionItems(
@@ -761,10 +767,10 @@ struct ContentView: View {
                                 )
                             }
                     }
-                    TableColumn("Type") { package in
+                    TableColumn("Type", value: \BrewPackage.kindSortValue) { package in
                         Text(package.kind.rawValue)
                     }
-                    TableColumn("State") { package in
+                    TableColumn("State", value: \BrewPackage.installedStateSortValue) { package in
                         Text(package.installed ? "Installed" : "Available")
                             .foregroundStyle(package.installed ? .green : .secondary)
                     }
@@ -1162,19 +1168,19 @@ struct ContentView: View {
     }
 
     private var filteredInstalledPackages: [BrewPackage] {
-        filteredPackages(store.installedPackages, by: installedFilter)
+        sortedPackages(filteredPackages(store.installedPackages, by: installedFilter), using: installedSortOrder)
     }
 
     private var filteredOutdatedPackages: [BrewPackage] {
-        filteredPackages(store.outdatedPackages, by: outdatedFilter)
+        sortedPackages(filteredPackages(store.outdatedPackages, by: outdatedFilter), using: outdatedSortOrder)
     }
 
     private var formulaSearchResults: [BrewPackage] {
-        store.searchResults.filter { $0.kind == .formula }
+        sortedPackages(store.searchResults.filter { $0.kind == .formula }, using: searchSortOrder)
     }
 
     private var caskSearchResults: [BrewPackage] {
-        store.searchResults.filter { $0.kind == .cask }
+        sortedPackages(store.searchResults.filter { $0.kind == .cask }, using: searchSortOrder)
     }
 
     private var selectedOutdatedPackages: [BrewPackage] {
@@ -1191,6 +1197,13 @@ struct ContentView: View {
                 || (package.installedVersion?.localizedCaseInsensitiveContains(trimmedFilter) ?? false)
                 || (package.currentVersion?.localizedCaseInsensitiveContains(trimmedFilter) ?? false)
         }
+    }
+
+    private func sortedPackages(
+        _ packages: [BrewPackage],
+        using sortOrder: [KeyPathComparator<BrewPackage>]
+    ) -> [BrewPackage] {
+        packages.sorted(using: sortOrder)
     }
 
     private func loadInfo(for packageID: BrewPackage.ID?, in packages: [BrewPackage]) {

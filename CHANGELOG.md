@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added sortable package tables for installed packages, search results, and outdated packages.
+
 ## 0.1.1
 
 Release-prep and usability polish.
