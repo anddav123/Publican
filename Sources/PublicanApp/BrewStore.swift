@@ -134,20 +134,27 @@ final class BrewStore: ObservableObject {
 
         await runBusyTask(status: "Searching formulae and casks...") {
             let installedIDs = Set(installedPackages.map(\.id))
-            let searchResult = try await runner.run(arguments: ["search", trimmedSearch])
-            appendLog(searchResult)
+            let formulaResult = try await runner.run(arguments: ["search", "--formula", trimmedSearch])
+            let caskResult = try await runner.run(arguments: ["search", "--cask", trimmedSearch])
+            appendLog(formulaResult)
+            appendLog(caskResult)
 
-            var uniqueResults: [String: BrewPackage] = [:]
-            for candidate in Self.parseLines(searchResult.standardOutput) {
-                let infoResult = try await runner.run(arguments: ["info", "--json=v2", candidate])
-                appendLog(infoResult)
-
-                for package in Self.parseSearchInfo(infoResult.standardOutput, installedIDs: installedIDs) {
-                    uniqueResults[package.id] = package
-                }
+            let formulae = Self.parseLines(formulaResult.standardOutput).map {
+                BrewPackage(
+                    name: $0,
+                    kind: .formula,
+                    installed: installedIDs.contains("\(BrewPackageKind.formula.rawValue):\($0)")
+                )
+            }
+            let casks = Self.parseLines(caskResult.standardOutput).map {
+                BrewPackage(
+                    name: $0,
+                    kind: .cask,
+                    installed: installedIDs.contains("\(BrewPackageKind.cask.rawValue):\($0)")
+                )
             }
 
-            searchResults = uniqueResults.values.sorted { left, right in
+            searchResults = (formulae + casks).sorted { left, right in
                 if left.kind == right.kind {
                     return left.name.localizedCaseInsensitiveCompare(right.name) == .orderedAscending
                 }
