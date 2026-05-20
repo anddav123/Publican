@@ -122,6 +122,14 @@ struct BrewPendingCommand: Identifiable {
     let action: () async -> Void
 }
 
+struct BrewCommandIssue: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let guidance: String
+    let command: String
+}
+
 enum BrewPackageAction {
     case install
     case uninstall

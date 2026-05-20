@@ -12,6 +12,8 @@ final class BrewStore: ObservableObject {
     @Published private(set) var healthSummary = "Homebrew health has not been checked yet."
     @Published private(set) var commandLog: String = "Ready."
     @Published private(set) var permissionNotice: String?
+    @Published private(set) var currentOperation: String?
+    @Published private(set) var lastCommandIssue: BrewCommandIssue?
     @Published private(set) var isBusy = false
     @Published private(set) var status = "Checking Homebrew..."
     @Published var pendingCommand: BrewPendingCommand?
@@ -303,7 +305,7 @@ final class BrewStore: ObservableObject {
 
         await runBusyTask(status: "Checking dependants for \(package.name)...") {
             let result = try await runner.run(arguments: ["uses", "--installed", package.name])
-            appendLog(result)
+            appendLog(result, recordsIssue: false)
             let dependants = Self.parseLines(result.standardOutput)
             confirmUninstall(package, dependants: dependants, dependencyCheckFailed: result.exitCode != 0 && !result.standardError.isEmpty)
             status = dependants.isEmpty ? "No installed dependants found for \(package.name)." : "Found \(dependants.count) dependant(s) for \(package.name)."
@@ -493,18 +495,23 @@ final class BrewStore: ObservableObject {
     private func runBusyTask(status busyStatus: String, operation: () async throws -> Void) async {
         isBusy = true
         status = busyStatus
+        currentOperation = busyStatus
+        lastCommandIssue = nil
 
         do {
             try await operation()
         } catch {
-            status = error.localizedDescription
+            let issue = Self.issue(for: error)
+            lastCommandIssue = issue
+            status = issue.title
             commandLog.append("\n\nError: \(error.localizedDescription)")
         }
 
+        currentOperation = nil
         isBusy = false
     }
 
-    private func appendLog(_ result: BrewCommandResult) {
+    private func appendLog(_ result: BrewCommandResult, recordsIssue: Bool = true) {
         let output = result.output.isEmpty ? "(no output)" : result.output
         commandLog.append("\n\n$ \(result.command)\nExit code: \(result.exitCode)\n\(output)")
 
@@ -512,6 +519,115 @@ final class BrewStore: ObservableObject {
             || result.output.localizedCaseInsensitiveContains("permission denied") {
             permissionNotice = "Homebrew reported a permissions issue. Installs and upgrades may need administrator access or corrected Homebrew folder ownership outside Publican."
         }
+
+        if recordsIssue, let issue = Self.issue(for: result) {
+            lastCommandIssue = issue
+        }
+    }
+
+    private static func issue(for error: Error) -> BrewCommandIssue {
+        BrewCommandIssue(
+            title: "Command could not start",
+            message: error.localizedDescription,
+            guidance: "Check that Homebrew and the Xcode Command Line Tools are installed, then try the action again.",
+            command: "Publican could not run the requested command."
+        )
+    }
+
+    private static func issue(for result: BrewCommandResult) -> BrewCommandIssue? {
+        guard result.exitCode != 0 else { return nil }
+
+        let output = result.output
+        let lowercased = output.lowercased()
+
+        if lowercased.contains("permission denied")
+            || lowercased.contains("not writable")
+            || lowercased.contains("operation not permitted") {
+            return BrewCommandIssue(
+                title: "Homebrew permission issue",
+                message: "Homebrew could not write to a folder or file it needs.",
+                guidance: "Fix the ownership or permissions mentioned in the command output, then run the action again.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("xcode")
+            || lowercased.contains("command line tools")
+            || lowercased.contains("clt") {
+            return BrewCommandIssue(
+                title: "Xcode Command Line Tools issue",
+                message: "Homebrew reported a problem with Apple's command line developer tools.",
+                guidance: "Install or update the Xcode Command Line Tools, then retry the Homebrew action.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("no available formula")
+            || lowercased.contains("no available cask")
+            || lowercased.contains("no formulae or casks found")
+            || lowercased.contains("not found") {
+            return BrewCommandIssue(
+                title: "Package not found",
+                message: "Homebrew could not find the requested package.",
+                guidance: "Check the package name, try a broader search term, or review the raw Homebrew output for spelling suggestions.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("already installed") {
+            return BrewCommandIssue(
+                title: "Package already installed",
+                message: "Homebrew says this package is already installed.",
+                guidance: "Refresh installed packages, or use upgrade if a newer version is available.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("is not installed")
+            || lowercased.contains("not installed") {
+            return BrewCommandIssue(
+                title: "Package is not installed",
+                message: "Homebrew could not uninstall or upgrade a package that is not currently installed.",
+                guidance: "Refresh installed packages and confirm the package is still present before running the action again.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("timed out")
+            || lowercased.contains("could not resolve")
+            || lowercased.contains("failed to download")
+            || lowercased.contains("network")
+            || lowercased.contains("curl:") {
+            return BrewCommandIssue(
+                title: "Network or download issue",
+                message: "Homebrew could not reach or download something it needs.",
+                guidance: "Check the network connection, VPN/proxy settings, and the raw command output, then try again.",
+                command: result.command
+            )
+        }
+
+        if lowercased.contains("quarantine")
+            || lowercased.contains("gatekeeper")
+            || lowercased.contains("damaged and can't be opened")
+            || lowercased.contains("malware") {
+            return BrewCommandIssue(
+                title: "macOS security blocked a cask",
+                message: "macOS security checks appear to have blocked an app installed by Homebrew.",
+                guidance: "Review the cask output. For trusted unsigned apps, you may need to remove quarantine manually or open via Finder's right-click Open flow.",
+                command: result.command
+            )
+        }
+
+        let message = output.isEmpty
+            ? "Homebrew exited with code \(result.exitCode) and did not return any output."
+            : "Homebrew exited with code \(result.exitCode)."
+
+        return BrewCommandIssue(
+            title: "Homebrew command failed",
+            message: message,
+            guidance: "Review the raw command output below. Publican preserved the original Homebrew message so the exact failure is visible.",
+            command: result.command
+        )
     }
 
     private static func parseLines(_ output: String) -> [String] {

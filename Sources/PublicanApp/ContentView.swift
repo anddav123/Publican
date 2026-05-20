@@ -1000,8 +1000,14 @@ struct ContentView: View {
                     .font(.headline)
                 Spacer()
                 if store.isBusy {
-                    ProgressView()
-                        .controlSize(.small)
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(store.currentOperation ?? "Working...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 Button {
                     withAnimation(.snappy) {
@@ -1013,6 +1019,12 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(showsCommandOutput ? "Collapse command output" : "Expand command output")
+            }
+
+            if let issue = store.lastCommandIssue {
+                commandIssueView(issue)
+            } else if let currentOperation = store.currentOperation {
+                currentOperationView(currentOperation)
             }
 
             if showsCommandOutput {
@@ -1029,6 +1041,53 @@ struct ContentView: View {
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func currentOperationView(_ operation: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(operation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func commandIssueView(_ issue: BrewCommandIssue) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(issue.title)
+                    .font(.subheadline.bold())
+                Text(issue.message)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(issue.guidance)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(issue.command)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func countRow(_ label: String, count: Int) -> some View {
