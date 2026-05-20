@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
 - Added sortable package tables for installed packages, search results, and outdated packages.
 - Improved the package details panel with selected-package actions, clearer metadata, and a more useful empty state.
 - Tightened core panel padding to make the main window more compact.
 - Reworked the main layout into Search, Manage, and Health tabs, with installed and outdated packages combined in Manage.
+- Sped up broad package searches by using scoped formula/cask search commands instead of loading package info for every search result.
 
 ## 0.1.1
 
