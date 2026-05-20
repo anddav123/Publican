@@ -36,29 +36,61 @@ Publican looks for Homebrew at:
 - `/opt/homebrew/bin/brew`
 - `/usr/local/bin/brew`
 
+## Install With Homebrew
+
+Publican is available from the project tap:
+
+```bash
+brew install --cask anddav123/publican/publican
+```
+
+The current release is an unsigned alpha build. macOS may show a Gatekeeper warning the first time it is opened, and on some Macs the cask install can report that `Publican.app` is damaged and should be moved to the Bin.
+
+For this alpha build, remove the quarantine flag after installing:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Publican.app
+open /Applications/Publican.app
+```
+
+This workaround should not be needed once Publican is signed and notarised with an Apple Developer ID certificate.
+
 ## Run From Source
 
 For development:
 
 ```bash
-cd /Users/openclaw/.openclaw/workspace/Publican
+git clone https://github.com/anddav123/Publican.git
+cd Publican
 swift run Publican
 ```
 
 If macOS leaves keyboard focus in Terminal after launch, click the Publican window once.
 
-## Build The App Bundle
+## Build And Install From Source
+
+Building locally is the best free/open-source route for users who want to avoid running a downloaded unsigned app bundle.
 
 ```bash
-cd /Users/openclaw/.openclaw/workspace/Publican
+git clone https://github.com/anddav123/Publican.git
+cd Publican
 ./scripts/build-app.sh
-open .build/Publican.app
+cp -R .build/Publican.app /Applications/Publican.app
+open /Applications/Publican.app
 ```
 
 This creates an unsigned app bundle at:
 
 ```text
 .build/Publican.app
+```
+
+Because the app was built locally rather than downloaded as a packaged release, macOS may apply fewer Gatekeeper restrictions. It is still unsigned, so right-click > Open may be required the first time.
+
+For local development without installing to Applications:
+
+```bash
+open .build/Publican.app
 ```
 
 ## Package A Release
@@ -90,7 +122,7 @@ Before publishing a release publicly:
 5. Add release notes from `CHANGELOG.md`.
 6. Sign and notarise the app if the release is intended for general public use.
 
-## Installing On Another Mac
+## Installing Downloaded Releases On Another Mac
 
 Because Publican is currently unsigned, macOS Gatekeeper may block it the first time.
 
