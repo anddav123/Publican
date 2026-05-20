@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
 - Clarified Manage table version columns and show `-` when Homebrew has not supplied version data.
 
