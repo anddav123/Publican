@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1
+
+Release-prep and usability polish.
+
+- Added Homebrew install guidance for the project tap.
+- Documented the current unsigned-app Gatekeeper/quarantine workaround.
+- Added a build-and-install-from-source route for users who prefer to avoid downloaded unsigned app bundles.
+- Added visible current-operation progress in the command output panel while Homebrew commands run.
+- Added plain-English command failure summaries for common Homebrew issues while keeping raw command output visible.
+- Classifies common failures such as permissions, Xcode Command Line Tools, package not found, already installed/not installed, network/download problems, and macOS security/quarantine blocks.
+
 ## 0.1.0
 
 Initial prototype release.
