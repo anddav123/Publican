@@ -125,6 +125,10 @@ struct BrewPackage: Identifiable, Hashable {
         "Outdated"
     }
 
+    var manageStateSortValue: String {
+        currentVersion == nil ? "Current" : "Outdated"
+    }
+
     var installedVersionSortValue: String {
         installedVersion ?? ""
     }

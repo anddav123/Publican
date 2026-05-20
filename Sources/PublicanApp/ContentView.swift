@@ -6,15 +6,12 @@ struct ContentView: View {
     private let homebrewInstallCommand = #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#
 
     @StateObject private var store = BrewStore()
-    @State private var selectedInstalledPackageID: BrewPackage.ID?
     @State private var selectedSearchResultID: BrewPackage.ID?
-    @State private var selectedOutdatedPackageIDs = Set<BrewPackage.ID>()
+    @State private var selectedManagedPackageIDs = Set<BrewPackage.ID>()
     @State private var activePackageSelection: PackageSelection?
-    @State private var installedFilter = ""
-    @State private var outdatedFilter = ""
-    @State private var installedSortOrder = [KeyPathComparator(\BrewPackage.name)]
+    @State private var manageFilter = ""
+    @State private var manageSortOrder = [KeyPathComparator(\BrewPackage.name)]
     @State private var searchSortOrder = [KeyPathComparator(\BrewPackage.name)]
-    @State private var outdatedSortOrder = [KeyPathComparator(\BrewPackage.name)]
     @AppStorage("autoRefreshInstalledOnLaunch") private var autoRefreshInstalledOnLaunch = true
     @AppStorage("autoRefreshOutdatedOnLaunch") private var autoRefreshOutdatedOnLaunch = true
     @AppStorage("commandOutputExpandedByDefault") private var showsCommandOutput = true
@@ -60,14 +57,11 @@ struct ContentView: View {
             }
             searchFieldFocused = true
         }
-        .onChange(of: selectedInstalledPackageID) { packageID in
-            loadInfo(for: packageID, in: store.installedPackages, source: .installed)
-        }
         .onChange(of: selectedSearchResultID) { packageID in
             loadInfo(for: packageID, in: store.searchResults, source: .search)
         }
-        .onChange(of: selectedOutdatedPackageIDs) { packageIDs in
-            loadInfo(for: packageIDs.first, in: store.outdatedPackages, source: .outdated)
+        .onChange(of: selectedManagedPackageIDs) { packageIDs in
+            loadInfo(for: packageIDs.first, in: managedPackages, source: .manage)
         }
         .alert(item: $store.pendingCommand) { pendingCommand in
             Alert(
@@ -365,14 +359,14 @@ struct ContentView: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 TabView {
-                    browseTab(isNarrow: false)
+                    searchTab
                         .tabItem {
-                            Label("Browse", systemImage: "magnifyingglass")
+                            Label("Search", systemImage: "magnifyingglass")
                         }
 
-                    outdatedTab
+                    manageTab
                         .tabItem {
-                            Label("Outdated", systemImage: "arrow.up.circle")
+                            Label("Manage", systemImage: "shippingbox")
                         }
 
                     healthTab
@@ -396,14 +390,14 @@ struct ContentView: View {
     private func compactMainContent(isNarrow: Bool) -> some View {
         VStack(spacing: 0) {
             TabView {
-                browseTab(isNarrow: isNarrow)
+                searchTab
                     .tabItem {
-                        Label("Browse", systemImage: "magnifyingglass")
+                        Label("Search", systemImage: "magnifyingglass")
                     }
 
-                outdatedTab
+                manageTab
                     .tabItem {
-                        Label("Outdated", systemImage: "arrow.up.circle")
+                        Label("Manage", systemImage: "shippingbox")
                     }
 
                 healthTab
@@ -422,55 +416,12 @@ struct ContentView: View {
         }
     }
 
-    private func browseTab(isNarrow: Bool) -> some View {
+    private var searchTab: some View {
         VStack(spacing: 0) {
             searchBar
 
-            Group {
-                if isNarrow {
-                    TabView {
-                        installedPackagePanel
-                            .tabItem {
-                                Label("Installed", systemImage: "shippingbox")
-                            }
-
-                        searchResultsPanel
-                            .tabItem {
-                                Label("Search Results", systemImage: "magnifyingglass")
-                            }
-                    }
-                } else {
-                    HStack(spacing: 0) {
-                        installedPackagePanel
-                            .frame(minWidth: 230, maxWidth: .infinity)
-
-                        Divider()
-
-                        searchResultsPanel
-                            .frame(minWidth: 230, maxWidth: .infinity)
-                    }
-                }
-            }
+            searchResultsPanel
             .frame(minHeight: 320)
-        }
-    }
-
-    private var installedPackagePanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            filterField("Filter installed", text: $installedFilter)
-
-            packagePanel(
-                title: "Installed Formulae & Casks",
-                packages: filteredInstalledPackages,
-                selection: $selectedInstalledPackageID,
-                sortOrder: $installedSortOrder,
-                actionTitle: "Uninstall",
-                actionIcon: "trash",
-                primaryAction: .uninstall,
-                action: { package in
-                    store.uninstall(package)
-                }
-            )
         }
     }
 
@@ -525,33 +476,44 @@ struct ContentView: View {
         )
     }
 
-    private var outdatedTab: some View {
+    private var manageTab: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Outdated Formulae & Casks")
+                Text("Installed Formulae & Casks")
                     .font(.headline)
                 Spacer()
                 Button {
+                    Task { await store.refreshInstalled() }
+                } label: {
+                    Label("Refresh Installed", systemImage: "arrow.clockwise")
+                }
+                .disabled(store.isBusy)
+
+                Button {
                     Task { await store.refreshOutdated() }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label("Check Outdated", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
                 }
                 .disabled(store.isBusy)
             }
 
-            filterField("Filter outdated", text: $outdatedFilter)
+            filterField("Filter installed or outdated", text: $manageFilter)
 
             ZStack {
-                Table(filteredOutdatedPackages, selection: $selectedOutdatedPackageIDs, sortOrder: $outdatedSortOrder) {
+                Table(managedPackages, selection: $selectedManagedPackageIDs, sortOrder: $manageSortOrder) {
                     TableColumn("Name", value: \BrewPackage.name) { package in
                         Text(package.name)
                             .contextMenu {
                                 packageActionItems(
                                     package: package,
-                                    primaryTitle: "Upgrade",
-                                    primaryAction: .upgrade,
+                                    primaryTitle: packageIsOutdated(package) ? "Upgrade" : "Uninstall",
+                                    primaryAction: packageIsOutdated(package) ? .upgrade : .uninstall,
                                     action: { selectedPackage in
-                                        store.upgrade(selectedPackage)
+                                        if packageIsOutdated(selectedPackage) {
+                                            store.upgrade(selectedPackage)
+                                        } else {
+                                            store.uninstall(selectedPackage)
+                                        }
                                     }
                                 )
                             }
@@ -567,41 +529,45 @@ struct ContentView: View {
                         Text(package.currentVersion ?? "Unknown")
                             .foregroundStyle(package.currentVersion == nil ? .secondary : .primary)
                     }
-                    TableColumn("State", value: \BrewPackage.outdatedStateSortValue) { _ in
-                        Text("Outdated")
-                            .foregroundStyle(.orange)
+                    TableColumn("State", value: \BrewPackage.manageStateSortValue) { package in
+                        Text(packageIsOutdated(package) ? "Outdated" : "Current")
+                            .foregroundStyle(packageIsOutdated(package) ? .orange : .green)
                     }
                 }
 
-                if filteredOutdatedPackages.isEmpty {
+                if managedPackages.isEmpty {
                     emptyState(
-                        title: store.outdatedPackages.isEmpty ? "No Outdated Packages" : "No Matching Packages",
-                        message: store.outdatedPackages.isEmpty ? "Run Check Outdated to refresh. If Homebrew is current, this list will stay empty." : "Clear or change the outdated filter."
+                        title: store.installedPackages.isEmpty ? "No Installed Packages Loaded" : "No Matching Packages",
+                        message: store.installedPackages.isEmpty ? "Use Refresh Installed to load Homebrew packages." : "Clear or change the manage filter."
                     )
                 }
             }
 
             HStack {
-                Text("\(selectedOutdatedPackages.count) selected")
+                Text("\(selectedManagedPackages.count) selected")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                if selectedOutdatedPackages.count == 1, let selectedPackage = selectedOutdatedPackages.first {
+                if selectedManagedPackages.count == 1, let selectedPackage = selectedManagedPackages.first {
                     packageActionsMenu(
                         package: selectedPackage,
-                        primaryTitle: "Upgrade",
-                        primaryAction: .upgrade,
+                        primaryTitle: packageIsOutdated(selectedPackage) ? "Upgrade" : "Uninstall",
+                        primaryAction: packageIsOutdated(selectedPackage) ? .upgrade : .uninstall,
                         action: { package in
-                            store.upgrade(package)
+                            if packageIsOutdated(package) {
+                                store.upgrade(package)
+                            } else {
+                                store.uninstall(package)
+                            }
                         }
                     )
                 }
                 Button {
-                    store.upgrade(selectedOutdatedPackages)
+                    store.upgrade(selectedManagedOutdatedPackages)
                 } label: {
-                    Label(selectedOutdatedPackages.count > 1 ? "Upgrade Selected (\(selectedOutdatedPackages.count))" : "Upgrade Selected", systemImage: "arrow.up.circle")
+                    Label(selectedManagedOutdatedPackages.count > 1 ? "Upgrade Outdated (\(selectedManagedOutdatedPackages.count))" : "Upgrade Outdated", systemImage: "arrow.up.circle")
                 }
-                .disabled(selectedOutdatedPackages.isEmpty || store.isBusy)
+                .disabled(selectedManagedOutdatedPackages.isEmpty || store.isBusy)
             }
         }
         .padding(10)
@@ -1057,7 +1023,7 @@ struct ContentView: View {
     private func packageMetadataGrid(for package: BrewPackage) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
             metadataRow("Type", package.kind.rawValue)
-            metadataRow("State", package.installed ? "Installed" : "Available")
+            metadataRow("State", packageStateText(for: package))
             metadataRow("Version", store.packageInfo.version ?? package.currentVersion ?? "Unknown")
             metadataRow("Installed", installedVersionText(for: package))
             if let currentVersion = package.currentVersion {
@@ -1104,7 +1070,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             Text("Select a Package")
                 .font(.headline)
-            Text("Choose a package from Browse or Outdated to view details and actions here.")
+            Text("Choose a package from Search or Manage to view details and actions here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1115,12 +1081,12 @@ struct ContentView: View {
     }
 
     private func packageStateBadge(_ package: BrewPackage) -> some View {
-        Text(package.installed ? "Installed" : "Available")
+        Text(packageStateText(for: package))
             .font(.caption.bold())
-            .foregroundStyle(package.installed ? .green : .secondary)
+            .foregroundStyle(packageIsOutdated(package) ? .orange : (package.installed ? .green : .secondary))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background((package.installed ? Color.green : Color.secondary).opacity(0.12))
+            .background((packageIsOutdated(package) ? Color.orange : (package.installed ? Color.green : Color.secondary)).opacity(0.12))
             .clipShape(Capsule())
     }
 
@@ -1304,14 +1270,6 @@ struct ContentView: View {
         }
     }
 
-    private var filteredInstalledPackages: [BrewPackage] {
-        sortedPackages(filteredPackages(store.installedPackages, by: installedFilter), using: installedSortOrder)
-    }
-
-    private var filteredOutdatedPackages: [BrewPackage] {
-        sortedPackages(filteredPackages(store.outdatedPackages, by: outdatedFilter), using: outdatedSortOrder)
-    }
-
     private var formulaSearchResults: [BrewPackage] {
         sortedPackages(store.searchResults.filter { $0.kind == .formula }, using: searchSortOrder)
     }
@@ -1320,25 +1278,43 @@ struct ContentView: View {
         sortedPackages(store.searchResults.filter { $0.kind == .cask }, using: searchSortOrder)
     }
 
-    private var selectedOutdatedPackages: [BrewPackage] {
-        filteredOutdatedPackages.filter { selectedOutdatedPackageIDs.contains($0.id) }
+    private var managedPackages: [BrewPackage] {
+        let outdatedByID = Dictionary(uniqueKeysWithValues: store.outdatedPackages.map { ($0.id, $0) })
+        let mergedPackages = store.installedPackages.map { package in
+            guard let outdatedPackage = outdatedByID[package.id] else { return package }
+            return BrewPackage(
+                name: package.name,
+                kind: package.kind,
+                installed: true,
+                installedVersion: outdatedPackage.installedVersion,
+                currentVersion: outdatedPackage.currentVersion
+            )
+        }
+
+        return sortedPackages(filteredPackages(mergedPackages, by: manageFilter), using: manageSortOrder)
+    }
+
+    private var selectedManagedPackages: [BrewPackage] {
+        managedPackages.filter { selectedManagedPackageIDs.contains($0.id) }
+    }
+
+    private var selectedManagedOutdatedPackages: [BrewPackage] {
+        selectedManagedPackages.filter(packageIsOutdated)
     }
 
     private var selectedDetailPackage: BrewPackage? {
         guard let activePackageSelection else { return nil }
 
         switch activePackageSelection.source {
-        case .installed:
-            return filteredInstalledPackages.first { $0.id == activePackageSelection.id }
+        case .manage:
+            return managedPackages.first { $0.id == activePackageSelection.id }
         case .search:
             return (formulaSearchResults + caskSearchResults).first { $0.id == activePackageSelection.id }
-        case .outdated:
-            return filteredOutdatedPackages.first { $0.id == activePackageSelection.id }
         }
     }
 
     private func primaryDetailAction(for package: BrewPackage) -> DetailAction {
-        if selectedOutdatedPackageIDs.contains(package.id) {
+        if packageIsOutdated(package) {
             return DetailAction(title: "Upgrade", systemImage: "arrow.up.circle", action: .upgrade, isEnabled: true)
         }
 
@@ -1391,6 +1367,18 @@ struct ContentView: View {
         return package.installed ? "Installed" : "Not installed"
     }
 
+    private func packageIsOutdated(_ package: BrewPackage) -> Bool {
+        store.outdatedPackages.contains { $0.id == package.id }
+    }
+
+    private func packageStateText(for package: BrewPackage) -> String {
+        if packageIsOutdated(package) {
+            return "Outdated"
+        }
+
+        return package.installed ? "Installed" : "Available"
+    }
+
     private func filteredPackages(_ packages: [BrewPackage], by filter: String) -> [BrewPackage] {
         let trimmedFilter = filter.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedFilter.isEmpty else { return packages }
@@ -1430,9 +1418,8 @@ struct ContentView: View {
     }
 
     private enum PackageSelectionSource {
-        case installed
+        case manage
         case search
-        case outdated
     }
 
     private struct DetailAction {
