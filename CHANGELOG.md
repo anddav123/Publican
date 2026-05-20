@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added sortable package tables for installed packages, search results, and outdated packages.
+- Improved the package details panel with selected-package actions, clearer metadata, and a more useful empty state.
+- Tightened core panel padding to make the main window more compact.
 
 ## 0.1.1
 

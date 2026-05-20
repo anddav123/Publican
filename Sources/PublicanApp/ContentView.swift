@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var selectedInstalledPackageID: BrewPackage.ID?
     @State private var selectedSearchResultID: BrewPackage.ID?
     @State private var selectedOutdatedPackageIDs = Set<BrewPackage.ID>()
+    @State private var activePackageSelection: PackageSelection?
     @State private var installedFilter = ""
     @State private var outdatedFilter = ""
     @State private var installedSortOrder = [KeyPathComparator(\BrewPackage.name)]
@@ -60,13 +61,13 @@ struct ContentView: View {
             searchFieldFocused = true
         }
         .onChange(of: selectedInstalledPackageID) { packageID in
-            loadInfo(for: packageID, in: store.installedPackages)
+            loadInfo(for: packageID, in: store.installedPackages, source: .installed)
         }
         .onChange(of: selectedSearchResultID) { packageID in
-            loadInfo(for: packageID, in: store.searchResults)
+            loadInfo(for: packageID, in: store.searchResults, source: .search)
         }
         .onChange(of: selectedOutdatedPackageIDs) { packageIDs in
-            loadInfo(for: packageIDs.first, in: store.outdatedPackages)
+            loadInfo(for: packageIDs.first, in: store.outdatedPackages, source: .outdated)
         }
         .alert(item: $store.pendingCommand) { pendingCommand in
             Alert(
@@ -163,7 +164,7 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -388,7 +389,7 @@ struct ContentView: View {
             Divider()
 
             packageInfoPanel
-                .frame(minWidth: 260, idealWidth: 300, maxWidth: 320)
+                .frame(minWidth: 300, idealWidth: 340, maxWidth: 380)
         }
     }
 
@@ -603,7 +604,7 @@ struct ContentView: View {
                 .disabled(selectedOutdatedPackages.isEmpty || store.isBusy)
             }
         }
-        .padding()
+        .padding(10)
         .frame(minWidth: 320)
     }
 
@@ -653,7 +654,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
             }
         }
-        .padding()
+        .padding(10)
         .frame(minWidth: 320)
     }
 
@@ -701,7 +702,7 @@ struct ContentView: View {
                 }
             }
         }
-        .padding()
+        .padding(10)
     }
 
     private var horizontalSearchBarContent: some View {
@@ -804,7 +805,7 @@ struct ContentView: View {
                 .disabled(!canRunPrimaryAction(primaryAction, for: selectedPackage(in: packages, selection: selection.wrappedValue)) || store.isBusy)
             }
         }
-        .padding()
+        .padding(10)
     }
 
     private func canRunPrimaryAction(_ action: BrewPackageAction, for package: BrewPackage?) -> Bool {
@@ -892,72 +893,73 @@ struct ContentView: View {
     }
 
     private var packageInfoPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let selectedPackage = selectedDetailPackage
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Package Info")
                     .font(.headline)
                 Spacer()
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
+                if let selectedPackage {
+                    packageStateBadge(selectedPackage)
+                } else {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    packageInfoHeader(store.packageInfo)
+                if let selectedPackage {
+                    VStack(alignment: .leading, spacing: 12) {
+                        packageInfoHeader(store.packageInfo, selectedPackage: selectedPackage)
 
-                    if let description = store.packageInfo.description {
-                        Text(description)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                        packageDetailActions(for: selectedPackage)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        infoRow("Type", store.packageInfo.kind.rawValue)
-                        infoRow("Version", store.packageInfo.version ?? "Unknown")
-                        infoRow("Installed", store.packageInfo.installedVersions.isEmpty ? "Not installed" : store.packageInfo.installedVersions.joined(separator: ", "))
-                        infoRow("Tap", store.packageInfo.tap ?? "Unknown")
-                    }
-
-                    if let homepage = store.packageInfo.homepage {
-                        infoRow("Homepage", homepage)
-                    }
-
-                    if !store.packageInfo.dependencies.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Dependencies")
-                                .font(.caption.bold())
+                        if let description = store.packageInfo.description {
+                            Text(description)
+                                .font(.callout)
                                 .foregroundStyle(.secondary)
-                            Text(store.packageInfo.dependencies.joined(separator: ", "))
-                                .font(.caption)
-                                .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
 
-                    if let caveats = store.packageInfo.caveats, !caveats.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Caveats")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                            Text(caveats)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
+                        packageMetadataGrid(for: selectedPackage)
+
+                        if let homepage = store.packageInfo.homepage {
+                            infoRow("Homepage", homepage)
+                        }
+
+                        if !store.packageInfo.dependencies.isEmpty {
+                            detailSection(title: "Dependencies") {
+                                Text(store.packageInfo.dependencies.joined(separator: ", "))
+                                    .font(.caption)
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if let caveats = store.packageInfo.caveats, !caveats.isEmpty {
+                            detailSection(title: "Caveats") {
+                                Text(caveats)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if !store.packageInfo.rawInfo.isEmpty {
+                            DisclosureGroup("Raw JSON") {
+                                Text(store.packageInfo.rawInfo)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
-
-                    if !store.packageInfo.rawInfo.isEmpty {
-                        DisclosureGroup("Raw JSON") {
-                            Text(store.packageInfo.rawInfo)
-                                .font(.system(.caption2, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                } else {
+                    emptyDetailState
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
             }
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -973,18 +975,153 @@ struct ContentView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private func packageInfoHeader(_ info: BrewPackageInfo) -> some View {
+    private func packageInfoHeader(_ info: BrewPackageInfo, selectedPackage: BrewPackage) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(info.displayName)
+            Text(info.displayName.isEmpty ? selectedPackage.name : info.displayName)
                 .font(.title3.bold())
                 .lineLimit(2)
-            if !info.name.isEmpty && info.name != info.displayName {
-                Text(info.name)
+
+            HStack(spacing: 6) {
+                Label(selectedPackage.kind.rawValue, systemImage: selectedPackage.kind == .formula ? "terminal" : "app")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                Text(selectedPackage.name)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .textSelection(.enabled)
+        }
+    }
+
+    private func packageDetailActions(for package: BrewPackage) -> some View {
+        let action = primaryDetailAction(for: package)
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Button {
+                    runPrimaryDetailAction(action, for: package)
+                } label: {
+                    Label(action.title, systemImage: action.systemImage)
+                }
+                .disabled(store.isBusy || !action.isEnabled)
+
+                secondaryDetailButtons(for: package)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    runPrimaryDetailAction(action, for: package)
+                } label: {
+                    Label(action.title, systemImage: action.systemImage)
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(store.isBusy || !action.isEnabled)
+
+                secondaryDetailButtons(for: package)
             }
         }
+    }
+
+    private func secondaryDetailButtons(for package: BrewPackage) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                openHomepage(for: package)
+            } label: {
+                Image(systemName: "safari")
+                    .frame(width: 18, height: 18)
+            }
+            .help("Open homepage")
+            .disabled(store.isBusy || store.packageInfo.homepage == nil)
+
+            Button {
+                copyToPasteboard(package.name)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 18, height: 18)
+            }
+            .help("Copy package name")
+
+            Button {
+                Task { await store.loadInfo(for: package) }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .frame(width: 18, height: 18)
+            }
+            .help("Reload package info")
+            .disabled(store.isBusy)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private func packageMetadataGrid(for package: BrewPackage) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+            metadataRow("Type", package.kind.rawValue)
+            metadataRow("State", package.installed ? "Installed" : "Available")
+            metadataRow("Version", store.packageInfo.version ?? package.currentVersion ?? "Unknown")
+            metadataRow("Installed", installedVersionText(for: package))
+            if let currentVersion = package.currentVersion {
+                metadataRow("Current", currentVersion)
+            }
+            metadataRow("Tap", store.packageInfo.tap ?? "Unknown")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func metadataRow(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func detailSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyDetailState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "shippingbox")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text("Select a Package")
+                .font(.headline)
+            Text("Choose a package from Browse or Outdated to view details and actions here.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 260)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 220)
+    }
+
+    private func packageStateBadge(_ package: BrewPackage) -> some View {
+        Text(package.installed ? "Installed" : "Available")
+            .font(.caption.bold())
+            .foregroundStyle(package.installed ? .green : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background((package.installed ? Color.green : Color.secondary).opacity(0.12))
+            .clipShape(Capsule())
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {
@@ -1187,6 +1324,73 @@ struct ContentView: View {
         filteredOutdatedPackages.filter { selectedOutdatedPackageIDs.contains($0.id) }
     }
 
+    private var selectedDetailPackage: BrewPackage? {
+        guard let activePackageSelection else { return nil }
+
+        switch activePackageSelection.source {
+        case .installed:
+            return filteredInstalledPackages.first { $0.id == activePackageSelection.id }
+        case .search:
+            return (formulaSearchResults + caskSearchResults).first { $0.id == activePackageSelection.id }
+        case .outdated:
+            return filteredOutdatedPackages.first { $0.id == activePackageSelection.id }
+        }
+    }
+
+    private func primaryDetailAction(for package: BrewPackage) -> DetailAction {
+        if selectedOutdatedPackageIDs.contains(package.id) {
+            return DetailAction(title: "Upgrade", systemImage: "arrow.up.circle", action: .upgrade, isEnabled: true)
+        }
+
+        if package.installed {
+            return DetailAction(title: "Uninstall", systemImage: "trash", action: .uninstall, isEnabled: true)
+        }
+
+        return DetailAction(title: "Install", systemImage: "plus.circle", action: .install, isEnabled: true)
+    }
+
+    private func runPrimaryDetailAction(_ detailAction: DetailAction, for package: BrewPackage) {
+        switch detailAction.action {
+        case .install:
+            store.install(package)
+        case .uninstall:
+            store.uninstall(package)
+        case .upgrade:
+            store.upgrade(package)
+        case .info:
+            Task { await store.loadInfo(for: package) }
+        }
+    }
+
+    private func openHomepage(for package: BrewPackage) {
+        Task {
+            let homepage: String?
+            if let currentHomepage = store.homepageForCurrentInfo(matching: package) {
+                homepage = currentHomepage
+            } else {
+                homepage = await store.homepage(for: package)
+            }
+
+            guard let homepage,
+                  let url = URL(string: homepage) else {
+                return
+            }
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func installedVersionText(for package: BrewPackage) -> String {
+        if !store.packageInfo.installedVersions.isEmpty {
+            return store.packageInfo.installedVersions.joined(separator: ", ")
+        }
+
+        if let installedVersion = package.installedVersion {
+            return installedVersion
+        }
+
+        return package.installed ? "Installed" : "Not installed"
+    }
+
     private func filteredPackages(_ packages: [BrewPackage], by filter: String) -> [BrewPackage] {
         let trimmedFilter = filter.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedFilter.isEmpty else { return packages }
@@ -1206,12 +1410,35 @@ struct ContentView: View {
         packages.sorted(using: sortOrder)
     }
 
-    private func loadInfo(for packageID: BrewPackage.ID?, in packages: [BrewPackage]) {
+    private func loadInfo(
+        for packageID: BrewPackage.ID?,
+        in packages: [BrewPackage],
+        source: PackageSelectionSource
+    ) {
         guard let packageID,
               let package = packages.first(where: { $0.id == packageID }) else {
             return
         }
 
+        activePackageSelection = PackageSelection(id: packageID, source: source)
         Task { await store.loadInfo(for: package) }
+    }
+
+    private struct PackageSelection {
+        let id: BrewPackage.ID
+        let source: PackageSelectionSource
+    }
+
+    private enum PackageSelectionSource {
+        case installed
+        case search
+        case outdated
+    }
+
+    private struct DetailAction {
+        let title: String
+        let systemImage: String
+        let action: BrewPackageAction
+        let isEnabled: Bool
     }
 }
