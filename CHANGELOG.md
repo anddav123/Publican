@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Clarified Manage table version columns and show `-` when Homebrew has not supplied version data.
+
 ## 0.1.2
 
 - Added sortable package tables for installed packages, search results, and outdated packages.

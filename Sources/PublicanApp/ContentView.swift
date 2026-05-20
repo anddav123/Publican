@@ -521,13 +521,13 @@ struct ContentView: View {
                     TableColumn("Type", value: \BrewPackage.kindSortValue) { package in
                         Text(package.kind.rawValue)
                     }
-                    TableColumn("Installed", value: \BrewPackage.installedVersionSortValue) { package in
-                        Text(package.installedVersion ?? "Unknown")
+                    TableColumn("Installed Version", value: \BrewPackage.installedVersionSortValue) { package in
+                        Text(manageInstalledVersionText(for: package))
                             .foregroundStyle(.secondary)
                     }
-                    TableColumn("Current", value: \BrewPackage.currentVersionSortValue) { package in
-                        Text(package.currentVersion ?? "Unknown")
-                            .foregroundStyle(package.currentVersion == nil ? .secondary : .primary)
+                    TableColumn("Latest Version", value: \BrewPackage.currentVersionSortValue) { package in
+                        Text(manageLatestVersionText(for: package))
+                            .foregroundStyle(packageIsOutdated(package) ? .primary : .secondary)
                     }
                     TableColumn("State", value: \BrewPackage.manageStateSortValue) { package in
                         Text(packageIsOutdated(package) ? "Outdated" : "Current")
@@ -1024,10 +1024,10 @@ struct ContentView: View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
             metadataRow("Type", package.kind.rawValue)
             metadataRow("State", packageStateText(for: package))
-            metadataRow("Version", store.packageInfo.version ?? package.currentVersion ?? "Unknown")
-            metadataRow("Installed", installedVersionText(for: package))
+            metadataRow("Version", store.packageInfo.version ?? package.currentVersion ?? "-")
+            metadataRow("Installed Version", installedVersionText(for: package))
             if let currentVersion = package.currentVersion {
-                metadataRow("Current", currentVersion)
+                metadataRow("Latest Version", currentVersion)
             }
             metadataRow("Tap", store.packageInfo.tap ?? "Unknown")
         }
@@ -1365,6 +1365,14 @@ struct ContentView: View {
         }
 
         return package.installed ? "Installed" : "Not installed"
+    }
+
+    private func manageInstalledVersionText(for package: BrewPackage) -> String {
+        package.installedVersion ?? "-"
+    }
+
+    private func manageLatestVersionText(for package: BrewPackage) -> String {
+        packageIsOutdated(package) ? (package.currentVersion ?? "-") : "-"
     }
 
     private func packageIsOutdated(_ package: BrewPackage) -> Bool {
