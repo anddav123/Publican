@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Stopped Homebrew health-check warnings from being mislabelled as package search failures.
+
 ## 0.1.3
 
 - Clarified Manage table version columns and show `-` when Homebrew has not supplied version data.

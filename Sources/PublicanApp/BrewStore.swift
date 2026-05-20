@@ -92,7 +92,7 @@ final class BrewStore: ObservableObject {
 
         await runBusyTask(status: "Checking Homebrew health...") {
             let doctorResult = try await runner.run(arguments: ["doctor"])
-            appendLog(doctorResult)
+            appendLog(doctorResult, recordsIssue: false)
 
             var issues = Self.parseDoctorOutput(doctorResult)
             issues.append(contentsOf: Self.checkWritablePaths([
