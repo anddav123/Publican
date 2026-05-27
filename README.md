@@ -253,4 +253,4 @@ Publican is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Version
 
-Current app bundle version: `0.1.4`.
+Current app bundle version: `0.1.5`.
