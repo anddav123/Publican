@@ -69,12 +69,25 @@ enum BrewPackageKind: String, CaseIterable, Identifiable {
         }
     }
 
-    var outdatedJSONArguments: [String] {
+    var outdatedJSONKey: String {
+        switch self {
+        case .formula:
+            return "formulae"
+        case .cask:
+            return "casks"
+        }
+    }
+
+    func outdatedJSONArguments(includeSelfUpdatingCasks: Bool = false) -> [String] {
         switch self {
         case .formula:
             return ["outdated", "--formula", "--json=v2"]
         case .cask:
-            return ["outdated", "--cask", "--json=v2"]
+            var arguments = ["outdated", "--cask", "--json=v2"]
+            if includeSelfUpdatingCasks {
+                arguments.append("--greedy-auto-updates")
+            }
+            return arguments
         }
     }
 

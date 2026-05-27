@@ -7,6 +7,7 @@ struct PublicanApp: App {
         UserDefaults.standard.register(defaults: [
             "autoRefreshInstalledOnLaunch": true,
             "autoRefreshOutdatedOnLaunch": true,
+            "includeSelfUpdatingCasksInOutdated": false,
             "commandOutputExpandedByDefault": true
         ])
 

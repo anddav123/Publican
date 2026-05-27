@@ -2,6 +2,7 @@
 
 ## 0.1.4
 
+- Added a setting to include self-updating casks, such as Firefox, in outdated checks.
 - Stopped Homebrew health-check warnings from being mislabelled as package search failures.
 
 ## 0.1.3

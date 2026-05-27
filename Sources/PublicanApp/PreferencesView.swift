@@ -3,6 +3,7 @@ import SwiftUI
 struct PreferencesView: View {
     @AppStorage("autoRefreshInstalledOnLaunch") private var autoRefreshInstalledOnLaunch = true
     @AppStorage("autoRefreshOutdatedOnLaunch") private var autoRefreshOutdatedOnLaunch = true
+    @AppStorage("includeSelfUpdatingCasksInOutdated") private var includeSelfUpdatingCasksInOutdated = false
     @AppStorage("commandOutputExpandedByDefault") private var commandOutputExpandedByDefault = true
 
     var body: some View {
@@ -10,6 +11,13 @@ struct PreferencesView: View {
             Section("Launch") {
                 Toggle("Refresh installed packages on launch", isOn: $autoRefreshInstalledOnLaunch)
                 Toggle("Refresh outdated packages on launch", isOn: $autoRefreshOutdatedOnLaunch)
+            }
+
+            Section("Outdated Checks") {
+                Toggle("Include self-updating casks", isOn: $includeSelfUpdatingCasksInOutdated)
+                Text("Includes casks such as Firefox that Homebrew normally excludes because the app can update itself.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Command Output") {

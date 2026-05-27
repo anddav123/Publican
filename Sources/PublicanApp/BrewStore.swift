@@ -3,6 +3,8 @@ import Combine
 
 @MainActor
 final class BrewStore: ObservableObject {
+    private static let includeSelfUpdatingCasksPreferenceKey = "includeSelfUpdatingCasksInOutdated"
+
     @Published private(set) var brewPath: String?
     @Published private(set) var installedPackages: [BrewPackage] = []
     @Published private(set) var searchResults: [BrewPackage] = []
@@ -466,11 +468,13 @@ final class BrewStore: ObservableObject {
     private func loadOutdatedPackages(using runner: BrewCommandRunner) async throws {
         var packages: [BrewPackage] = []
         let installedIDs = Set(installedPackages.map(\.id))
+        let includeSelfUpdatingCasks = UserDefaults.standard.bool(forKey: Self.includeSelfUpdatingCasksPreferenceKey)
 
         for kind in BrewPackageKind.allCases {
-            let result = try await runner.run(arguments: kind.outdatedJSONArguments)
+            let result = try await runner.run(arguments: kind.outdatedJSONArguments(includeSelfUpdatingCasks: includeSelfUpdatingCasks))
             let parsedPackages = Self.parseOutdatedJSON(result.standardOutput, kind: kind, installedIDs: installedIDs)
-            if parsedPackages.isEmpty && !result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).contains("\"formulae\"") {
+            let expectedJSONKey = "\"\(kind.outdatedJSONKey)\""
+            if parsedPackages.isEmpty && !result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).contains(expectedJSONKey) {
                 let fallbackResult = try await runner.run(arguments: kind.outdatedArguments)
                 let names = Self.parseOutdatedLines(fallbackResult.standardOutput)
                 packages.append(contentsOf: names.map {
